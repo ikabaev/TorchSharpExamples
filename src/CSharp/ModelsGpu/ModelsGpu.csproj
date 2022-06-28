@@ -1,0 +1,12 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="libtorch-cuda-11.3-win-x64" Version="1.11.0.1" />
+    <PackageReference Include="TorchSharp" Version="0.96.8" />
+  </ItemGroup>
+
+</Project>

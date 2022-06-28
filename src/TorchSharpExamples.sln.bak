@@ -9,7 +9,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Models", "CSharp\Models\Mod
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CSharpExamples", "CSharp\CSharpExamples\CSharpExamples.csproj", "{E56038AD-B99F-4333-BA8C-3F65C95C638E}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharpExamples", "FSharp\FSharpExamples\FSharpExamples.fsproj", "{E9B24578-E02C-4B9B-B4A4-2458E876E8C1}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharpExamples", "FSharp\FSharpExamples\FSharpExamples.fsproj", "{E9B24578-E02C-4B9B-B4A4-2458E876E8C1}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "CSharpGpuExamples", "CSharp\CSharpGpuExamples\CSharpGpuExamples.csproj", "{491958D6-7D2F-4277-8E4B-21A0E4A78DE7}"
 EndProject
