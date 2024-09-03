@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 
 using TorchSharp;
-using TorchSharp.torchvision;
+using static TorchSharp.torchvision;
 
 using TorchSharp.Examples;
 using TorchSharp.Examples.Utils;
@@ -44,14 +44,17 @@ namespace CSharpExamples
         private const int batch_size = 64;
         private const int eval_batch_size = 32;
 
-        internal static void Run(int epochs, int timeout)
+        internal static void Run(int epochs, int timeout, string logdir)
 
         {
             torch.random.manual_seed(1);
 
             var cwd = Environment.CurrentDirectory;
 
-            var device = torch.cuda.is_available() ? torch.CUDA : torch.CPU;
+            var device = 
+                torch.cuda.is_available() ? torch.CUDA :
+                torch.mps_is_available() ? torch.MPS :
+                torch.CPU;
 
             Console.WriteLine();
             Console.WriteLine($"\tRunning SequenceToSequence on {device.type.ToString()} for {epochs} epochs, terminating after {TimeSpan.FromSeconds(timeout)}.");
@@ -84,10 +87,12 @@ namespace CSharpExamples
             Console.WriteLine();
 
             var model = new TransformerModel(ntokens, emsize, nhead, nhid, nlayers, dropout).to((Device)device);
-            var loss = cross_entropy_loss();
+            var loss = CrossEntropyLoss();
             var lr = 2.50;
             var optimizer = torch.optim.SGD(model.parameters(), lr);
             var scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1, 0.95, last_epoch: 15);
+
+            var writer = String.IsNullOrEmpty(logdir) ? null : torch.utils.tensorboard.SummaryWriter(logdir, createRunName: true);
 
             var totalTime = new Stopwatch();
             totalTime.Start();
@@ -106,6 +111,11 @@ namespace CSharpExamples
                 Console.WriteLine($"\nEnd of epoch: {epoch} | lr: {optimizer.ParamGroups.First().LearningRate:0.00} | time: {sw.Elapsed.TotalSeconds:0.0}s | loss: {val_loss:0.00}\n");
                 scheduler.step();
 
+                if (writer != null)
+                {
+                    writer.add_scalar("seq2seq/loss", (float)val_loss, epoch);
+                }
+
                 if (totalTime.Elapsed.TotalSeconds > timeout) break;
             }
 
@@ -115,7 +125,7 @@ namespace CSharpExamples
             Console.WriteLine($"\nEnd of training | time: {totalTime.Elapsed.TotalSeconds:0.0}s | loss: {tst_loss:0.00}\n");
         }
 
-        private static void train(int epoch, Tensor train_data, TransformerModel model, Loss criterion, int bptt, int ntokens, torch.optim.Optimizer optimizer)
+        private static void train(int epoch, Tensor train_data, TransformerModel model, Loss<Tensor, Tensor, Tensor> criterion, int bptt, int ntokens, torch.optim.Optimizer optimizer)
         {
             model.train();
 
@@ -144,7 +154,7 @@ namespace CSharpExamples
 
                     using (var output = model.forward(data, src_mask))
                     {
-                        var loss = criterion(output.view(-1, ntokens), targets);
+                        var loss = criterion.forward(output.view(-1, ntokens), targets);
                         loss.backward();
                         torch.nn.utils.clip_grad_norm_(model.parameters(), 0.5);
                         optimizer.step();
@@ -164,7 +174,7 @@ namespace CSharpExamples
             }
         }
 
-        private static double evaluate(Tensor eval_data, TransformerModel model, Loss criterion, int bptt, int ntokens, torch.optim.Optimizer optimizer)
+        private static double evaluate(Tensor eval_data, TransformerModel model, Loss<Tensor, Tensor, Tensor> criterion, int bptt, int ntokens, torch.optim.Optimizer optimizer)
         {
             model.eval();
 
@@ -187,7 +197,7 @@ namespace CSharpExamples
                     }
                     using (var output = model.forward(data, src_mask))
                     {
-                        var loss = criterion(output.view(-1, ntokens), targets);
+                        var loss = criterion.forward(output.view(-1, ntokens), targets);
                         total_loss += data.shape[0] * loss.to(torch.CPU).item<float>();
                     }
 

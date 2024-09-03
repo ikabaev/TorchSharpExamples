@@ -40,14 +40,14 @@ let datasetPath = Path.Join(Environment.GetFolderPath(Environment.SpecialFolder.
 
 torch.random.manual_seed(1L) |> ignore
 
-let hasCUDA = torch.cuda.is_available()
+let hasCUDA = TorchText.Datasets.cuda_is_available()
 
 let device = if hasCUDA then torch.CUDA else torch.CPU
 
-let criterion x y = functional.cross_entropy_loss().Invoke(x,y)
+let criterion x y = torch.nn.functional.cross_entropy(x,y)
 
 type TextClassificationModel(vocabSize, embedDim, nClasses, device:torch.Device) as this =
-    inherit Module("Transformer")
+    inherit Module<torch.Tensor,torch.Tensor,torch.Tensor>("Transformer")
 
     let embedding = EmbeddingBag(vocabSize, embedDim, sparse=false)
     let fc = Linear(embedDim, nClasses)
@@ -64,10 +64,8 @@ type TextClassificationModel(vocabSize, embedDim, nClasses, device:torch.Device)
         if device.``type`` = DeviceType.CUDA then
             this.``to``(device) |> ignore
 
-    override _.forward(input) = raise (NotImplementedException("single-argument forward()"))
-
     override _.forward(input, offsets) =
-        embedding.forward(input, offsets) --> fc
+        embedding.call(input, offsets) --> fc
 
 let train epoch (trainData:IEnumerable<torch.Tensor*torch.Tensor*torch.Tensor>) (model:TextClassificationModel) (optimizer:torch.optim.Optimizer) =
 

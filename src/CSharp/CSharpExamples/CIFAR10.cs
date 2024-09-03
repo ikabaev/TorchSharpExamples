@@ -4,9 +4,10 @@ using System.IO;
 using System.Linq;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 using TorchSharp;
-using TorchSharp.torchvision;
+using static TorchSharp.torchvision;
 
 using TorchSharp.Examples;
 using TorchSharp.Examples.Utils;
@@ -39,7 +40,7 @@ namespace CSharpExamples
         private readonly static int _logInterval = 25;
         private readonly static int _numClasses = 10;
 
-        internal static void Run(int epochs, int timeout, string modelName)
+        internal static void Run(int epochs, int timeout, string logdir, string modelName)
         {
             torch.random.manual_seed(1);
 
@@ -47,9 +48,10 @@ namespace CSharpExamples
                 // This worked on a GeForce RTX 2080 SUPER with 8GB, for all the available network architectures.
                 // It may not fit with less memory than that, but it's worth modifying the batch size to fit in memory.
                 torch.cuda.is_available() ? torch.CUDA :
+                torch.mps_is_available() ? torch.MPS :
                 torch.CPU;
 
-            if (device.type == DeviceType.CUDA)
+            if (device.type != DeviceType.CPU)
             {
                 _trainBatchSize *= 8;
                 _testBatchSize *= 8;
@@ -58,6 +60,8 @@ namespace CSharpExamples
             Console.WriteLine();
             Console.WriteLine($"\tRunning {modelName} with {_dataset} on {device.type.ToString()} for {epochs} epochs, terminating after {TimeSpan.FromSeconds(timeout)}.");
             Console.WriteLine();
+
+            var writer = String.IsNullOrEmpty(logdir) ? null : torch.utils.tensorboard.SummaryWriter(logdir, createRunName: true);
 
             var sourceDir = _dataLocation;
             var targetDir = Path.Combine(_dataLocation, "test_data");
@@ -70,7 +74,7 @@ namespace CSharpExamples
 
             Console.WriteLine($"\tCreating the model...");
 
-            Module model = null;
+            Module<Tensor,Tensor> model = null;
 
             switch (modelName.ToLower())
             {
@@ -131,8 +135,10 @@ namespace CSharpExamples
                     Stopwatch epchSW = new Stopwatch();
                     epchSW.Start();
 
-                    Train(model, optimizer, nll_loss(), train.Data(), epoch, _trainBatchSize, train.Size);
-                    Test(model, nll_loss(), test.Data(), test.Size);
+                    var loss = NLLLoss();
+
+                    Train(model, optimizer, loss, train.Data(), epoch, _trainBatchSize, train.Size);
+                    Test(model, loss, writer, modelName.ToLower(), test.Data(), epoch, test.Size);
 
                     epchSW.Stop();
                     Console.WriteLine($"Elapsed time for this epoch: {epchSW.Elapsed.TotalSeconds} s.");
@@ -148,9 +154,9 @@ namespace CSharpExamples
         }
 
         private static void Train(
-            Module model,
+            Module<Tensor,Tensor> model,
             torch.optim.Optimizer optimizer,
-            Loss loss,
+            Loss<Tensor, Tensor, Tensor> loss,
             IEnumerable<(Tensor, Tensor)> dataLoader,
             int epoch,
             long batchSize,
@@ -173,7 +179,7 @@ namespace CSharpExamples
 
                     var prediction = model.forward(data);
                     var lsm = log_softmax(prediction, 1);
-                    var output = loss(lsm, target);
+                    var output = loss.forward(lsm, target);
 
                     output.backward();
 
@@ -195,9 +201,12 @@ namespace CSharpExamples
         }
 
         private static void Test(
-            Module model,
-            Loss loss,
+            Module<Tensor, Tensor> model,
+            Loss<Tensor, Tensor, Tensor> loss,
+            TorchSharp.Modules.SummaryWriter writer,
+            string modelName,
             IEnumerable<(Tensor, Tensor)> dataLoader,
+            int epoch,
             long size)
         {
             model.eval();
@@ -213,7 +222,7 @@ namespace CSharpExamples
                 {
                     var prediction = model.forward(data);
                     var lsm = log_softmax(prediction, 1);
-                    var output = loss(lsm, target);
+                    var output = loss.forward(lsm, target);
 
                     testLoss += output.ToSingle();
                     batchCount += 1;
@@ -223,6 +232,12 @@ namespace CSharpExamples
             }
 
             Console.WriteLine($"\rTest set: Average loss {(testLoss / batchCount).ToString("0.0000")} | Accuracy {((float)correct / size).ToString("0.0000")}");
+
+            if (writer != null)
+            {
+                writer.add_scalar($"{modelName}/loss", (float)(testLoss / batchCount), epoch);
+                writer.add_scalar($"{modelName}/accuracy", (float)correct / size, epoch);
+            }
         }
     }
 }

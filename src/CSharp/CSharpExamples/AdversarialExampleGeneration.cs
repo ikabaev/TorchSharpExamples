@@ -4,7 +4,7 @@ using System.IO;
 using System.Collections.Generic;
 
 using TorchSharp;
-using TorchSharp.torchvision;
+using static TorchSharp.torchvision;
 
 using TorchSharp.Examples;
 using TorchSharp.Examples.Utils;
@@ -52,7 +52,7 @@ namespace CSharpExamples
         private static int _trainBatchSize = 64;
         private static int _testBatchSize = 128;
 
-        static internal void Run(int epochs, int timeout, string dataset)
+        static internal void Run(int epochs, int timeout, string logdir, string dataset)
         {
             _epochs = epochs;
 
@@ -84,6 +84,8 @@ namespace CSharpExamples
             var sourceDir = _dataLocation;
             var targetDir = Path.Combine(_dataLocation, "test_data");
 
+            var writer = String.IsNullOrEmpty(logdir) ? null : torch.utils.tensorboard.SummaryWriter(logdir, createRunName:true);
+
             if (!Directory.Exists(targetDir)) {
                 Directory.CreateDirectory(targetDir);
                 Decompress.DecompressGZipFile(Path.Combine(sourceDir, "train-images-idx3-ubyte.gz"), targetDir);
@@ -107,7 +109,7 @@ namespace CSharpExamples
                     model = new TorchSharp.Examples.MNIST.Model("model", device);
 
                     using (var train = new MNISTReader(targetDir, "train", _trainBatchSize, device: device, shuffle: true, transform: normImage)) {
-                        MNIST.TrainingLoop(dataset, timeout, (Device)device, model, train, test);
+                        MNIST.TrainingLoop(dataset, timeout, writer, (Device)device, model, train, test);
                     }
 
                     Console.WriteLine("Moving on to the Adversarial model.\n");
@@ -123,7 +125,7 @@ namespace CSharpExamples
                 var epsilons = new double[] { 0, 0.05, 0.1, 0.15, 0.20, 0.25, 0.30, 0.35, 0.40, 0.45, 0.50 };
 
                 foreach (var ε in epsilons) {
-                    var attacked = Test(model, nll_loss(), ε, test, test.Size);
+                    var attacked = Test(model, NLLLoss(), ε, test, test.Size);
                     Console.WriteLine($"Epsilon: {ε:F2}, accuracy: {attacked:P2}");
                 }
             }
@@ -139,7 +141,7 @@ namespace CSharpExamples
 
         private static double Test(
             TorchSharp.Examples.MNIST.Model model,
-            Loss criterion,
+            Loss<Tensor, Tensor, Tensor> criterion,
             double ε,
             IEnumerable<(Tensor, Tensor)> dataLoader,
             long size)
@@ -153,7 +155,7 @@ namespace CSharpExamples
                     data.requires_grad = true;
 
                     using (var output = model.forward(data))
-                    using (var loss = criterion(output, target))
+                    using (var loss = criterion.forward(output, target))
                     {
 
                         model.zero_grad();

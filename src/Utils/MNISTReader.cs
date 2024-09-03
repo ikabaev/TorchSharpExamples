@@ -4,7 +4,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using TorchSharp.torchvision;
+using static TorchSharp.torchvision;
 using static TorchSharp.torch;
 
 namespace TorchSharp.Examples
@@ -103,7 +103,7 @@ namespace TorchSharp.Examples
                 if (transform != null) {
                     // Carefully dispose the original
                     using(var batch_copy = batch)
-                    batch = transform.forward(batch);
+                    batch = transform.call(batch);
                 }
 
                 data.Add(batch);
